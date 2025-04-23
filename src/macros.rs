@@ -5,8 +5,8 @@
 ///         // 2: fanin
 ///         // create_and: name of create method in mockturtle
 ///         // is_and: name of is method in mockturtle
-///         "*" = And(2, create_and, is_and),
-///         "xor" = Xor(2, create_xor, is_xor)
+///         "*" = And(2),
+///         "xor" = Xor(2)
 ///     }
 /// }
 /// ```
