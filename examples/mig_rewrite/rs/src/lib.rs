@@ -1,6 +1,6 @@
 use eggmock::{
-    egg::{rewrite, CostFunction, EGraph, Extractor, Id, Language, Runner},
-    Mig, MigLanguage, MigReceiverFFI, Network, Receiver, Rewriter, RewriterFFI,
+    Mig, MigLanguage, Network, Receiver, ReceiverFFI, Rewriter, RewriterFFI,
+    egg::{CostFunction, EGraph, Extractor, Id, Language, Runner, rewrite},
 };
 use std::cmp::Ordering;
 use std::collections::HashSet;
@@ -52,19 +52,19 @@ impl CostFunction<MigLanguage> for ExampleCostFunction {
 struct ExampleRewriter;
 
 impl Rewriter for ExampleRewriter {
-    type Node = Mig;
+    type Gate = Mig;
     type Intermediate = (EGraph<MigLanguage, ()>, Vec<Id>);
 
     fn create_receiver(
         &mut self,
-    ) -> impl Receiver<Node = Mig, Result = Self::Intermediate> + 'static {
+    ) -> impl Receiver<Gate = Mig, Result = Self::Intermediate> + 'static {
         EGraph::new(())
     }
 
     fn rewrite(
         self,
         (graph, roots): Self::Intermediate,
-        output: impl Receiver<Node = Mig, Result = ()>,
+        output: impl Receiver<Gate = Mig, Result = ()>,
     ) {
         let rules = &[
             rewrite!("commute_1"; "(maj ?a ?b ?c)" => "(maj ?b ?a ?c)"),
@@ -80,7 +80,7 @@ impl Rewriter for ExampleRewriter {
     }
 }
 
-#[no_mangle]
-extern "C" fn example_mig_rewrite() -> MigReceiverFFI<RewriterFFI<Mig>> {
+#[unsafe(no_mangle)]
+extern "C" fn example_mig_rewrite() -> ReceiverFFI<'static, RewriterFFI> {
     RewriterFFI::new(ExampleRewriter)
 }

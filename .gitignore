@@ -4,3 +4,4 @@ cmake/
 cmake-*/
 .idea/
 target/
+.cache/

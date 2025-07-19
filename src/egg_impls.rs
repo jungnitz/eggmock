@@ -1,7 +1,7 @@
 use egg::{Analysis, CostFunction, EGraph, Extractor, Language};
 use std::ops::Index;
 
-use crate::{Id, Network, NetworkLanguage, Receiver, Signal};
+use crate::{Id, Network, NetworkLanguage, Node, Receiver, Signal};
 
 fn egraph_id_for_signal<L: NetworkLanguage, A: Analysis<L>>(
     graph: &mut EGraph<L, A>,
@@ -9,19 +9,39 @@ fn egraph_id_for_signal<L: NetworkLanguage, A: Analysis<L>>(
 ) -> egg::Id {
     let child_id = signal.node_id().into();
     if signal.is_inverted() {
-        graph.add(L::not(child_id))
+        let child = graph.id_to_node(child_id);
+        if child.is_not() {
+            child.children()[0]
+        } else {
+            graph.add(L::not(child_id))
+        }
     } else {
         child_id
     }
 }
 
+fn create_node<L: NetworkLanguage, A: Analysis<L>>(
+    graph: &mut EGraph<L, A>,
+    node: Node<L::Gate>,
+) -> Signal {
+    let node = L::from_node(node, |signal| egraph_id_for_signal(graph, signal));
+    Signal::new(Id::from(graph.add(node)), false)
+}
+
 impl<L: NetworkLanguage, A: Analysis<L>> Receiver for EGraph<L, A> {
-    type Node = L::Node;
+    type Gate = L::Gate;
     type Result = (Self, Vec<egg::Id>);
 
-    fn create_node(&mut self, node: Self::Node) -> Signal {
-        let node = L::from_node(node, |signal| egraph_id_for_signal(self, signal));
-        Signal::new(Id::from(self.add(node)), false)
+    fn create_input(&mut self, idx: u32) -> Signal {
+        create_node(self, Node::Input(idx))
+    }
+
+    fn create_false(&mut self) -> Signal {
+        create_node(self, Node::False)
+    }
+
+    fn create(&mut self, gate: L::Gate) -> Signal {
+        create_node(self, Node::Gate(gate))
     }
 
     fn done(mut self, outputs: &[Signal]) -> Self::Result {
@@ -37,7 +57,7 @@ impl<L: NetworkLanguage, A: Analysis<L>> Receiver for EGraph<L, A> {
 impl<L: NetworkLanguage, CF: CostFunction<L>, A: Analysis<L>> Network
     for (Extractor<'_, CF, L, A>, Vec<egg::Id>)
 {
-    type Node = L::Node;
+    type Gate = L::Gate;
 
     fn outputs(&self) -> impl Iterator<Item = Signal> {
         self.1
@@ -45,7 +65,7 @@ impl<L: NetworkLanguage, CF: CostFunction<L>, A: Analysis<L>> Network
             .map(|o| ExtractorIndexWrapper(&self.0).to_signal(*o))
     }
 
-    fn node(&self, id: Id) -> Self::Node {
+    fn node(&self, id: Id) -> Node<Self::Gate> {
         self.0
             .find_best_node(id.into())
             .to_node(|id| ExtractorIndexWrapper(&self.0).to_signal(id))

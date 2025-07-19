@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.19)
 project(eggmock)
 
 set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 include(FetchContent)
 
@@ -14,3 +15,7 @@ FetchContent_MakeAvailable(Corrosion)
 
 add_subdirectory(mockturtle)
 add_subdirectory(examples)
+
+add_library(eggmock INTERFACE)
+target_link_libraries(eggmock INTERFACE mockturtle)
+target_include_directories(eggmock INTERFACE include)
