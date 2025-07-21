@@ -9,13 +9,16 @@ include(FetchContent)
 FetchContent_Declare(
         Corrosion
         GIT_REPOSITORY https://github.com/corrosion-rs/corrosion.git
-        GIT_TAG v0.5 # Optionally specify a commit hash, version tag or branch here
+        GIT_TAG v0.5
 )
 FetchContent_MakeAvailable(Corrosion)
 
 add_subdirectory(mockturtle)
-add_subdirectory(examples)
+if (NOT DEFINED EGGMOCK_EXAMPLES OR EGGMOCK_EXAMPLES)
+    add_subdirectory(examples)
+endif()
 
 add_library(eggmock INTERFACE)
 target_link_libraries(eggmock INTERFACE mockturtle)
+target_include_directories(eggmock INTERFACE include)
 target_include_directories(eggmock INTERFACE include)
