@@ -17,6 +17,7 @@ pub use receiver::*;
 pub use rewrite::*;
 
 define_network! {
+    #[derive(Copy)]
     pub enum Mig {
         "maj" = Maj(3)
     }
@@ -46,6 +47,7 @@ impl ReceiveFrom<FFIGate> for Mig {
 }
 
 define_network! {
+    #[derive(Copy)]
     pub enum Aig {
         "and" = And(2)
     }
@@ -76,6 +78,7 @@ impl ReceiveFrom<FFIGate> for Aig {
 }
 
 define_network! {
+    #[derive(Copy)]
     pub enum Xag {
         "and" = And(2),
         "xor" = Xor(2)
@@ -102,6 +105,7 @@ impl ReceiveFrom<FFIGate> for Xag {
 }
 
 define_network! {
+    #[derive(Copy)]
     pub enum Xmg {
         "xor" = Xor3(3, Xor),
         "maj" = Maj(3)
