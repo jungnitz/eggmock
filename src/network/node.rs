@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 use std::hash::Hash;
 
-use crate::{Id, NetworkLanguage, Signal};
+use crate::{Id, Signal};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Node<G> {
@@ -33,9 +33,6 @@ impl<G: Gate> Node<G> {
 
 /// Describes a gate of a logic network.
 pub trait Gate: 'static + Debug + Sized + Clone + Hash + Eq {
-    /// An *egg* Language that can represent networks with this gate type.
-    type Language: NetworkLanguage<Gate = Self>;
-
     /// Returns the same type of gate but with the input signals mapped with the given function.
     fn map_input_signals(self, map: impl FnMut(Signal) -> Signal) -> Self;
 

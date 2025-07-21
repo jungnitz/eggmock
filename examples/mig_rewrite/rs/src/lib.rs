@@ -1,5 +1,5 @@
 use eggmock::{
-    Mig, MigLanguage, Network, Receiver, ReceiverFFI, Rewriter, RewriterFFI,
+    EggExt, Mig, MigLanguage, Receiver, ReceiverFFI, Rewriter, RewriterFFI,
     egg::{CostFunction, EGraph, Extractor, Id, Language, Runner, rewrite},
 };
 use std::cmp::Ordering;
@@ -76,7 +76,7 @@ impl Rewriter for ExampleRewriter {
             .with_egraph(graph)
             .run(rules);
         runner.print_report();
-        (Extractor::new(&runner.egraph, ExampleCostFunction), roots).send(output)
+        Extractor::new(&runner.egraph, ExampleCostFunction).send(output, roots);
     }
 }
 

@@ -1,50 +1,37 @@
-use egg::{Analysis, CostFunction, EGraph, Extractor, Language};
-use std::ops::Index;
+use egg::{Analysis, CostFunction, EGraph, Extractor, Language, RecExpr};
+use rustc_hash::FxHashMap;
 
-use crate::{Id, Network, NetworkLanguage, Node, Receiver, Signal};
+use crate::{Id, NetworkLanguage, Node, Receiver, Signal};
+
+type EggId = egg::Id;
 
 fn egraph_id_for_signal<L: NetworkLanguage, A: Analysis<L>>(
     graph: &mut EGraph<L, A>,
     signal: Signal,
-) -> egg::Id {
-    let child_id = signal.node_id().into();
+) -> EggId {
+    let id = EggId::from(signal.node_id().to_usize());
     if signal.is_inverted() {
-        let child = graph.id_to_node(child_id);
+        let child = graph.id_to_node(id);
         if child.is_not() {
             child.children()[0]
         } else {
-            graph.add(L::not(child_id))
+            graph.add(L::not(id))
         }
     } else {
-        child_id
+        id
     }
-}
-
-fn create_node<L: NetworkLanguage, A: Analysis<L>>(
-    graph: &mut EGraph<L, A>,
-    node: Node<L::Gate>,
-) -> Signal {
-    let node = L::from_node(node, |signal| egraph_id_for_signal(graph, signal));
-    Signal::new(Id::from(graph.add(node)), false)
 }
 
 impl<L: NetworkLanguage, A: Analysis<L>> Receiver for EGraph<L, A> {
     type Gate = L::Gate;
-    type Result = (Self, Vec<egg::Id>);
+    type Result = (Self, Vec<EggId>);
 
-    fn create_input(&mut self, idx: u32) -> Signal {
-        create_node(self, Node::Input(idx))
+    fn create(&mut self, node: Node<Self::Gate>) -> Signal {
+        let node = L::from_node(node, |signal| egraph_id_for_signal(self, signal));
+        Signal::new(Id::from_usize(self.add(node).into()), false)
     }
 
-    fn create_false(&mut self) -> Signal {
-        create_node(self, Node::False)
-    }
-
-    fn create(&mut self, gate: L::Gate) -> Signal {
-        create_node(self, Node::Gate(gate))
-    }
-
-    fn done(mut self, outputs: &[Signal]) -> Self::Result {
+    fn done(mut self, outputs: Vec<Signal>) -> Self::Result {
         let outputs = Vec::from_iter(
             outputs
                 .iter()
@@ -54,57 +41,84 @@ impl<L: NetworkLanguage, A: Analysis<L>> Receiver for EGraph<L, A> {
     }
 }
 
-impl<L: NetworkLanguage, CF: CostFunction<L>, A: Analysis<L>> Network
-    for (Extractor<'_, CF, L, A>, Vec<egg::Id>)
-{
-    type Gate = L::Gate;
+pub trait EggExt {
+    type Language: NetworkLanguage;
 
-    fn outputs(&self) -> impl Iterator<Item = Signal> {
-        self.1
-            .iter()
-            .map(|o| ExtractorIndexWrapper(&self.0).to_signal(*o))
-    }
+    fn get_node(&self, id: EggId) -> &Self::Language;
 
-    fn node(&self, id: Id) -> Node<Self::Gate> {
-        self.0
-            .find_best_node(id.into())
-            .to_node(|id| ExtractorIndexWrapper(&self.0).to_signal(id))
-            .expect("id should point to a non-not node")
-    }
-}
-
-pub trait EggIdToSignal {
-    fn to_signal(&self, id: egg::Id) -> Signal;
-}
-
-impl<I: Index<egg::Id, Output: NetworkLanguage>> EggIdToSignal for I {
-    fn to_signal(&self, start_id: egg::Id) -> Signal {
+    fn collapse_nots(&self, start_id: EggId) -> (EggId, &Self::Language, bool) {
         let mut id = start_id;
         let mut invert = false;
         loop {
-            let node = &self[id];
+            let node = &self.get_node(id);
             if node.is_not() {
                 invert = !invert;
                 id = node.children()[0];
             } else {
-                break Signal::new(id.into(), invert);
+                break (id, node, invert);
             }
             assert_ne!(id, start_id, "loop detected")
         }
     }
+
+    fn send<R: Receiver<Gate = <Self::Language as NetworkLanguage>::Gate>>(
+        &self,
+        mut receiver: R,
+        outputs: impl IntoIterator<Item = EggId>,
+    ) -> R::Result {
+        let mut src_to_dest: FxHashMap<EggId, Signal> = FxHashMap::default();
+        let mut output_signals = Vec::new();
+        for output_id in outputs {
+            // depth-first traversal of the underlying expression
+            let mut path = Vec::new();
+
+            let mut node_id = output_id;
+            let mut node = self.get_node(node_id);
+            let mut known_inputs = 0;
+            loop {
+                if known_inputs == node.children().len() || src_to_dest.contains_key(&node_id) {
+                    if known_inputs == node.children().len() {
+                        if let Some(dest_node) = node.to_node(|id| src_to_dest[&id]) {
+                            src_to_dest.insert(node_id, receiver.create(dest_node));
+                        } else {
+                            // node is a not
+                            let child = src_to_dest[&node.children()[0]];
+                            src_to_dest.insert(node_id, !child);
+                        }
+                    }
+                    if path.is_empty() {
+                        break;
+                    }
+                    (node_id, node, known_inputs) = path.pop().unwrap();
+                    known_inputs += 1;
+                } else {
+                    let child_id = node.children()[known_inputs];
+                    path.push((node_id, node, known_inputs));
+                    node_id = child_id;
+                    node = self.get_node(node_id);
+                    known_inputs = 0;
+                }
+            }
+            output_signals.push(src_to_dest[&output_id]);
+        }
+        receiver.done(output_signals)
+    }
 }
 
-struct ExtractorIndexWrapper<'r, E>(&'r E);
-
-impl<CF, L, A> Index<egg::Id> for ExtractorIndexWrapper<'_, Extractor<'_, CF, L, A>>
-where
-    CF: CostFunction<L>,
-    L: NetworkLanguage,
-    A: Analysis<L>,
+impl<'a, CF: CostFunction<L>, L: NetworkLanguage, N: Analysis<L>> EggExt
+    for Extractor<'a, CF, L, N>
 {
-    type Output = L;
+    type Language = L;
 
-    fn index(&self, index: egg::Id) -> &Self::Output {
-        self.0.find_best_node(index)
+    fn get_node(&self, id: EggId) -> &Self::Language {
+        self.find_best_node(id)
+    }
+}
+
+impl<'a, L: NetworkLanguage> EggExt for RecExpr<L> {
+    type Language = L;
+
+    fn get_node(&self, id: EggId) -> &Self::Language {
+        &self[id]
     }
 }

@@ -11,7 +11,7 @@
 #[macro_export]
 macro_rules! define_network {
     ($(#[$meta:meta])* $vis:vis enum $name:ident {
-        $($gate_str:literal = $gate:ident($($fn:ident,)? $fanin:literal)),+
+        $($gate_str:literal = $gate:ident($fanin:tt $(, $fn:ident)?)),+
     }) => {
         $crate::paste::paste! {
             $crate::egg::define_language! {
@@ -20,27 +20,24 @@ macro_rules! define_network {
                     Input(u32),
                     "f" = False,
                     "!" = Not($crate::egg::Id),
-                    $($gate_str = $gate([$crate::egg::Id;$fanin])),+,
+                    $($gate_str = $gate($crate::define_network!(@fanin_typ $crate::egg::Id, $fanin))),+,
                 }
             }
 
-            #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+            #[derive(Debug, Clone, Eq, PartialEq, Hash)]
             $(#[$meta])*
             $vis enum $name {
-                $($gate([$crate::Signal;$fanin])),+
+                $($gate($crate::define_network!(@fanin_typ $crate::Signal, $fanin))),+
             }
 
             impl $crate::Gate for $name {
-                type Language = [<$name Language>];
-
-                fn map_input_signals(self, mut map: impl FnMut(Signal) -> Signal) -> Self {
-                    match self {
+                fn map_input_signals(mut self, mut map: impl FnMut(Signal) -> Signal) -> Self {
+                    match &mut self {
                         $(Self::$gate(signals) => {
-                            $crate::seq_macro::seq!(N in 0..$fanin {
-                                Self::$gate([#(map(signals[N]),)*])
-                            })
+                            signals.iter_mut().for_each(|signal| *signal = map(*signal));
                         }),+
                     }
+                    self
                 }
 
                 fn inputs(&self) -> &[Signal] {
@@ -76,9 +73,7 @@ macro_rules! define_network {
                         $crate::Node::False => Self::False,
                         $(
                         $crate::Node::Gate($name::$gate(ids)) => Self::$gate(
-                            $crate::seq_macro::seq!(N in 0..$fanin {
-                                [#(signal_mapper(ids[N]),)*]
-                            })
+                            $crate::define_network!(@map_ids ids, signal_mapper, $fanin)
                         )
                         ),+
                     }
@@ -94,9 +89,7 @@ macro_rules! define_network {
                         Self::Not(_) => None,
                         $(
                         Self::$gate(ids) => Some($crate::Node::Gate($name::$gate(
-                            $crate::seq_macro::seq!(N in 0..$fanin {
-                                [#(id_mapper(ids[N]),)*]
-                            })
+                            $crate::define_network!(@map_ids ids, id_mapper, $fanin)
                         )))
                         ),+
                     }
@@ -120,4 +113,19 @@ macro_rules! define_network {
     (@gate_fn $gate:ident) => {
         $crate::ffi::__private::GateFunction::$gate
     };
+    (@fanin_typ $of:ty, *) => {
+        Vec<$of>
+    };
+    (@fanin_typ $of:ty, $num:literal) => {
+        [$of; $num]
+    };
+    (@map_ids $ids:ident, $map:ident, *) => {
+        // &mut to silence a warning for unused mut
+        Vec::from_iter($ids.iter().copied().map(&mut $map))
+    };
+    (@map_ids $ids:ident, $map:ident, $num:literal) => {
+        $crate::seq_macro::seq!(N in 0..$num {
+            [#($map($ids[N]),)*]
+        })
+    }
 }

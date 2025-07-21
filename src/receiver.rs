@@ -9,23 +9,15 @@ pub trait Receiver: Sized {
     type Gate;
     type Result;
 
-    fn create_input(&mut self, idx: u32) -> Signal;
-    fn create_false(&mut self) -> Signal;
-
-    /// Creates the given gate. Returns the id of the signal for that gate.
-    fn create(&mut self, gate: Self::Gate) -> Signal;
-
-    fn create_node(&mut self, node: Node<Self::Gate>) -> Signal {
-        match node {
-            Node::Input(idx) => self.create_input(idx),
-            Node::False => self.create_false(),
-            Node::Gate(gate) => self.create(gate),
-        }
+    fn create_gate(&mut self, gate: Self::Gate) -> Signal {
+        self.create(Node::Gate(gate))
     }
+
+    fn create(&mut self, node: Node<Self::Gate>) -> Signal;
 
     /// Creates the result from the previously transferred nodes where `outputs` contains the output
     /// signals.
-    fn done(self, outputs: &[Signal]) -> Self::Result;
+    fn done(self, outputs: Vec<Signal>) -> Self::Result;
 
     /// Maps the result of this Receiver using the given function.
     fn map<NewResult, F>(self, map: F) -> impl Receiver<Gate = Self::Gate, Result = NewResult>
@@ -89,19 +81,15 @@ where
     type Gate = G;
     type Result = O::Result;
 
-    fn create_input(&mut self, idx: u32) -> Signal {
-        self.original.create_input(idx)
+    fn create(&mut self, node: Node<Self::Gate>) -> Signal {
+        match node {
+            Node::False => self.original.create(Node::False),
+            Node::Input(idx) => self.original.create(Node::Input(idx)),
+            Node::Gate(gate) => gate.receive_into(&mut self.original),
+        }
     }
 
-    fn create_false(&mut self) -> Signal {
-        self.original.create_false()
-    }
-
-    fn create(&mut self, gate: Self::Gate) -> Signal {
-        gate.receive_into(&mut self.original)
-    }
-
-    fn done(self, outputs: &[Signal]) -> Self::Result {
+    fn done(self, outputs: Vec<Signal>) -> Self::Result {
         self.original.done(outputs)
     }
 }
@@ -119,19 +107,11 @@ where
     type Gate = O::Gate;
     type Result = R;
 
-    fn create_input(&mut self, idx: u32) -> Signal {
-        self.original.create_input(idx)
-    }
-
-    fn create_false(&mut self) -> Signal {
-        self.original.create_false()
-    }
-
-    fn create(&mut self, node: Self::Gate) -> Signal {
+    fn create(&mut self, node: Node<Self::Gate>) -> Signal {
         self.original.create(node)
     }
 
-    fn done(self, outputs: &[Signal]) -> Self::Result {
+    fn done(self, outputs: Vec<Signal>) -> Self::Result {
         (self.map)(self.original.done(outputs))
     }
 }
@@ -150,19 +130,15 @@ where
     type Gate = From;
     type Result = To::Result;
 
-    fn create_input(&mut self, idx: u32) -> Signal {
-        self.to.create_input(idx)
+    fn create(&mut self, node: Node<Self::Gate>) -> Signal {
+        match node {
+            Node::False => self.to.create(Node::False),
+            Node::Input(idx) => self.to.create(Node::Input(idx)),
+            Node::Gate(gate) => (self.adapter)(&mut self.to, gate),
+        }
     }
 
-    fn create_false(&mut self) -> Signal {
-        self.to.create_false()
-    }
-
-    fn create(&mut self, node: Self::Gate) -> Signal {
-        (self.adapter)(&mut self.to, node)
-    }
-
-    fn done(self, outputs: &[Signal]) -> Self::Result {
+    fn done(self, outputs: Vec<Signal>) -> Self::Result {
         self.to.done(outputs)
     }
 }

@@ -1,105 +1,145 @@
 use crate::Receiver;
 
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
 
-mod backwards;
 mod language;
 mod node;
 mod signal;
 
-pub use backwards::*;
 pub use language::*;
 pub use node::*;
 pub use signal::*;
 
-/// A type that contains a logic network.
-pub trait Network {
-    type Gate: Gate;
+struct NetworkNode<G> {
+    node: Node<G>,
+    fanout: Vec<Signal>,
+}
 
-    /// Returns an iterator containing the ids of the output nodes of the underlying network.
-    fn outputs(&self) -> impl Iterator<Item = Signal>;
+pub struct Network<G> {
+    // topologically sorted (!) list of nodes where index is node id
+    nodes: Vec<NetworkNode<G>>,
+    memo: FxHashMap<Node<G>, Id>,
+    leaves: Vec<Id>,
+    outputs: Vec<Signal>,
+}
+
+impl<G: Gate> Network<G> {
+    /// Returns an array containing the ids of the output nodes of the underlying network.
+    pub fn outputs(&self) -> &[Signal] {
+        &self.outputs
+    }
+
+    pub fn set_outputs(&mut self, outputs: Vec<Signal>) {
+        self.outputs = outputs;
+    }
+
+    /// Adds the given node to this network.
+    pub fn add(&mut self, node: Node<G>) -> Id {
+        if let Some(id) = self.memo.get(&node) {
+            return *id;
+        }
+
+        let id = Id::from(self.nodes.len() as u32);
+        if node.inputs().is_empty() {
+            self.leaves.push(id);
+        } else {
+            if node
+                .inputs()
+                .iter()
+                .any(|input| input.node_id().to_usize() >= id.to_usize())
+            {
+                panic!("node input id out of bounds");
+            }
+            for (i, input) in node.inputs().iter().enumerate() {
+                if node.inputs()[0..i].iter().any(|prev| prev == input) {
+                    continue;
+                }
+                self.nodes[input.node_id().to_usize()].fanout.push(*input);
+            }
+        }
+        self.memo.insert(node.clone(), id);
+        self.nodes.push(NetworkNode {
+            node,
+            fanout: Vec::new(),
+        });
+        id
+    }
 
     /// Returns the node with the given id.
-    fn node(&self, id: Id) -> Node<Self::Gate>;
+    pub fn node(&self, id: Id) -> &Node<G> {
+        &self.nodes[id.to_usize()].node
+    }
 
-    /// Returns an iterator over all nodes that are reachable from an output and their ids.
-    fn iter(&self) -> impl Iterator<Item = (Id, Node<Self::Gate>)> + '_ {
-        NetworkNodeIterator {
-            network: self,
-            visited: FxHashSet::default(),
-            remaining: Vec::from_iter(self.outputs().map(|s| s.node_id())),
-        }
+    /// Returns an iterator over all nodes.
+    pub fn iter(&self) -> impl Iterator<Item = (Id, &Node<G>)> + '_ {
+        self.nodes
+            .iter()
+            .enumerate()
+            .map(|(id, node)| (Id::from_usize(id), &node.node))
+    }
+
+    /// Returns the *set* of signals pointing *to* nodes that have the node with the given id as an
+    /// input.
+    pub fn node_outputs(&self, id: Id) -> &[Signal] {
+        &self.nodes[id.to_usize()].fanout
+    }
+
+    /// Returns an iterator over all leaf nodes (i.e. nodes with no inputs).
+    pub fn leaves(&self) -> &[Id] {
+        &self.leaves
     }
 
     /// Sends this network to the given receiver.
-    fn send<R: Receiver<Gate = Self::Gate>>(&self, mut receiver: R) -> R::Result {
+    pub fn send<R: Receiver<Gate = G>>(mut self, mut receiver: R) -> R::Result {
         let mut src_to_dest: FxHashMap<Id, Signal> = FxHashMap::default();
-        let mut path = Vec::new();
-        for signal in self.outputs() {
-            let mut node_id = signal.node_id();
-            let mut node = self.node(node_id);
-            let mut known_inputs = 0;
-            loop {
-                if known_inputs == node.inputs().len() || src_to_dest.contains_key(&node_id) {
-                    if known_inputs == node.inputs().len() {
-                        let dest_node = node.map_input_ids(|id| src_to_dest[&id]);
-                        let dest_signal = receiver.create_node(dest_node);
-                        src_to_dest.insert(node_id, dest_signal);
-                    }
-                    if path.is_empty() {
-                        break;
-                    }
-                    (node_id, node, known_inputs) = path.pop().unwrap();
-                    known_inputs += 1;
-                } else {
-                    let child_id = node.inputs()[known_inputs].node_id();
-                    path.push((node_id, node, known_inputs));
-                    node_id = child_id;
-                    node = self.node(node_id);
-                    known_inputs = 0;
-                }
-            }
+        let outputs = std::mem::take(&mut self.outputs);
+        for (id, node) in self {
+            let mapped_node = node.map_input_ids(|id| src_to_dest[&id]);
+            let signal = receiver.create(mapped_node);
+            src_to_dest.insert(id, signal);
         }
-        let outputs = Vec::from_iter(
-            self.outputs()
-                .map(|signal| signal.map_id(|id| src_to_dest[&id])),
-        );
-        receiver.done(outputs.as_slice())
+        receiver.done(outputs)
     }
 
-    fn with_backward_edges(&self) -> impl NetworkWithBackwardEdges<Gate = Self::Gate> + '_ {
-        ComputedNetworkWithBackwardEdges::new(self)
-    }
-
-    fn dump(&self) {
+    pub fn dump(&self) {
         for (id, node) in self.iter() {
             println!("{id:?}: {node:?}");
         }
     }
 }
 
-struct NetworkNodeIterator<'a, P: ?Sized> {
-    network: &'a P,
-    visited: FxHashSet<Id>,
-    remaining: Vec<Id>,
+impl<G> Default for Network<G> {
+    fn default() -> Self {
+        Self {
+            leaves: Default::default(),
+            memo: Default::default(),
+            nodes: Default::default(),
+            outputs: Default::default(),
+        }
+    }
 }
 
-impl<'a, P: Network + ?Sized> Iterator for NetworkNodeIterator<'a, P> {
-    type Item = (Id, Node<P::Gate>);
+pub struct IntoIter<G>(usize, std::vec::IntoIter<NetworkNode<G>>);
+
+impl<G> IntoIterator for Network<G> {
+    type Item = (Id, Node<G>);
+    type IntoIter = IntoIter<G>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        IntoIter(0, self.nodes.into_iter())
+    }
+}
+
+impl<G> Iterator for IntoIter<G> {
+    type Item = (Id, Node<G>);
 
     fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            let node_id = self.remaining.pop()?;
-            if !self.visited.insert(node_id) {
-                continue;
-            }
-            let node = self.network.node(node_id);
-            self.remaining
-                .extend(node.inputs().iter().map(|s| s.node_id()));
-            break Some((node_id, node));
-        }
+        let next = self.1.next()?;
+        let id = Id::from_usize(self.0);
+        self.0 += 1;
+        Some((id, next.node))
     }
 }
 
@@ -108,15 +148,12 @@ impl<'a, P: Network + ?Sized> Iterator for NetworkNodeIterator<'a, P> {
 #[repr(C)]
 pub struct Id(u32);
 
-impl From<egg::Id> for Id {
-    fn from(value: egg::Id) -> Self {
-        Id(usize::from(value) as u32)
+impl Id {
+    pub fn to_usize(self) -> usize {
+        self.0 as usize
     }
-}
-
-impl From<Id> for egg::Id {
-    fn from(value: Id) -> Self {
-        egg::Id::from(value.0 as usize)
+    pub fn from_usize(id: usize) -> Id {
+        Self(id as u32)
     }
 }
 
@@ -129,5 +166,27 @@ impl From<u32> for Id {
 impl From<Id> for u32 {
     fn from(id: Id) -> Self {
         id.0
+    }
+}
+
+pub struct NetworkReceiver<G>(Network<G>);
+
+impl<G: Gate> Receiver for NetworkReceiver<G> {
+    type Gate = G;
+    type Result = Network<G>;
+
+    fn create(&mut self, node: Node<Self::Gate>) -> Signal {
+        Signal::new(self.0.add(node), false)
+    }
+
+    fn done(mut self, outputs: Vec<Signal>) -> Self::Result {
+        self.0.set_outputs(outputs);
+        self.0
+    }
+}
+
+impl<G> Default for NetworkReceiver<G> {
+    fn default() -> Self {
+        Self(Default::default())
     }
 }
