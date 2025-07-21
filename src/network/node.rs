@@ -17,13 +17,13 @@ impl<G: Gate> Node<G> {
             Self::Gate(gate) => gate.inputs(),
         }
     }
-    pub fn map_input_signals(self, map: impl FnMut(Signal) -> Signal) -> Self {
+    pub fn map_input_signals(self, map: impl FnMut(Signal, usize) -> Signal) -> Self {
         match self {
             Self::False | Self::Input(_) => self,
             Self::Gate(gate) => Node::Gate(gate.map_input_signals(map)),
         }
     }
-    pub fn map_input_ids(self, map: impl FnMut(Id) -> Signal) -> Self {
+    pub fn map_input_ids(self, map: impl FnMut(Id, usize) -> Signal) -> Self {
         match self {
             Self::False | Self::Input(_) => self,
             Self::Gate(gate) => Node::Gate(gate.map_input_ids(map)),
@@ -34,14 +34,14 @@ impl<G: Gate> Node<G> {
 /// Describes a gate of a logic network.
 pub trait Gate: 'static + Debug + Sized + Clone + Hash + Eq {
     /// Returns the same type of gate but with the input signals mapped with the given function.
-    fn map_input_signals(self, map: impl FnMut(Signal) -> Signal) -> Self;
+    fn map_input_signals(self, map: impl FnMut(Signal, usize) -> Signal) -> Self;
 
     /// Returns the input signals of this gate.
     fn inputs(&self) -> &[Signal];
 
     /// Returns the same type of gate but with the ids of each input signal replaced by the signal
     /// given by the mapping function. See also [`Signal::map_id`].
-    fn map_input_ids(self, mut map: impl FnMut(Id) -> Signal) -> Self {
-        self.map_input_signals(|signal| signal.map_id(&mut map))
+    fn map_input_ids(self, mut map: impl FnMut(Id, usize) -> Signal) -> Self {
+        self.map_input_signals(|signal, idx| signal.map_id(|id| map(id, idx)))
     }
 }

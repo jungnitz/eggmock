@@ -27,7 +27,7 @@ impl<L: NetworkLanguage, A: Analysis<L>> Receiver for EGraph<L, A> {
     type Result = (Self, Vec<EggId>);
 
     fn create(&mut self, node: Node<Self::Gate>) -> Signal {
-        let node = L::from_node(node, |signal| egraph_id_for_signal(self, signal));
+        let node = L::from_node(node, |signal, _| egraph_id_for_signal(self, signal));
         Signal::new(Id::from_usize(self.add(node).into()), false)
     }
 
@@ -78,7 +78,7 @@ pub trait EggExt {
             loop {
                 if known_inputs == node.children().len() || src_to_dest.contains_key(&node_id) {
                     if known_inputs == node.children().len() {
-                        if let Some(dest_node) = node.to_node(|id| src_to_dest[&id]) {
+                        if let Some(dest_node) = node.to_node(|id, _| src_to_dest[&id]) {
                             src_to_dest.insert(node_id, receiver.create(dest_node));
                         } else {
                             // node is a not

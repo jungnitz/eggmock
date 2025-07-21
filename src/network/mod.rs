@@ -96,7 +96,7 @@ impl<G: Gate> Network<G> {
         let mut src_to_dest: FxHashMap<Id, Signal> = FxHashMap::default();
         let outputs = std::mem::take(&mut self.outputs);
         for (id, node) in self {
-            let mapped_node = node.map_input_ids(|id| src_to_dest[&id]);
+            let mapped_node = node.map_input_ids(|id, _| src_to_dest[&id]);
             let signal = receiver.create(mapped_node);
             src_to_dest.insert(id, signal);
         }

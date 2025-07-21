@@ -31,10 +31,10 @@ macro_rules! define_network {
             }
 
             impl $crate::Gate for $name {
-                fn map_input_signals(mut self, mut map: impl FnMut(Signal) -> Signal) -> Self {
+                fn map_input_signals(mut self, mut map: impl FnMut(Signal, usize) -> Signal) -> Self {
                     match &mut self {
                         $(Self::$gate(signals) => {
-                            signals.iter_mut().for_each(|signal| *signal = map(*signal));
+                            signals.iter_mut().enumerate().for_each(|(i, signal)| *signal = map(*signal, i));
                         }),+
                     }
                     self
@@ -66,7 +66,7 @@ macro_rules! define_network {
 
                 fn from_node(
                     node: Node<$name>,
-                    mut signal_mapper: impl FnMut(Signal) -> egg::Id,
+                    mut signal_mapper: impl FnMut(Signal, usize) -> egg::Id,
                 ) -> Self {
                     match node {
                         $crate::Node::Input(id) => Self::Input(id),
@@ -81,7 +81,7 @@ macro_rules! define_network {
 
                 fn to_node(
                     &self,
-                    mut id_mapper: impl FnMut(egg::Id) -> Signal
+                    mut id_mapper: impl FnMut(egg::Id, usize) -> Signal
                 ) -> Option<Node<$name>> {
                     match self {
                         Self::Input(id) => Some($crate::Node::Input(*id)),
@@ -121,11 +121,11 @@ macro_rules! define_network {
     };
     (@map_ids $ids:ident, $map:ident, *) => {
         // &mut to silence a warning for unused mut
-        Vec::from_iter($ids.iter().copied().map(&mut $map))
+        Vec::from_iter($ids.iter().enumerate().map(|(i, item)| $map(*item, i)))
     };
     (@map_ids $ids:ident, $map:ident, $num:literal) => {
         $crate::seq_macro::seq!(N in 0..$num {
-            [#($map($ids[N]),)*]
+            [#($map($ids[N], N),)*]
         })
     }
 }
