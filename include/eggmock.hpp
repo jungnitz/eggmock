@@ -50,7 +50,7 @@ typename ntk_t::signal to_ntk_sig( ntk_t& ntk, signal s )
 }
 
 template<class ntk_t>
-void free_ntkptr( void* state )
+void free_ntkptr( void* )
 {
   // no-op
 }
@@ -239,7 +239,7 @@ struct rewriter_ffi
 struct rewriter
 {
 public:
-  rewriter( rewriter_ffi ffi ) : _ffi( ffi ) {}
+  explicit rewriter( rewriter_ffi ffi ) : _ffi( ffi ) {}
   ~rewriter()
   {
     if ( _ffi.data )
@@ -291,7 +291,7 @@ signal send_ntk_signal( ntk_t const& ntk, typename ntk_t::signal const& src_sig,
   {
     // collect fanins, should be 3 at most
     signal fanins[3];
-    ntk.foreach_fanin( node, [&]( ntk_t::signal const& fanin, uint32_t const index ) {
+    ntk.foreach_fanin( node, [&]( typename ntk_t::signal const& fanin, uint32_t const index ) {
       if ( index >= 3 )
       {
         return;
@@ -331,7 +331,7 @@ signal send_ntk_signal( ntk_t const& ntk, typename ntk_t::signal const& src_sig,
 } // namespace _private
 
 template<class ntk_t, class result>
-result send_ntk( ntk_t const& ntk, receiver<result>& receiver )
+result send_ntk( ntk_t const& ntk, receiver<result> receiver )
 {
   ntk.clear_values();
   ntk.clear_visited();
@@ -349,9 +349,8 @@ result send_ntk( ntk_t const& ntk, receiver<result>& receiver )
 }
 
 template<class ntk_t>
-ntk_t rewrite( ntk_t const& ntk, receiver_ffi<rewriter_ffi> rewrite )
+ntk_t rewrite( ntk_t const& ntk, receiver<rewriter_ffi> rcv )
 {
-  receiver rcv( rewrite );
   rewriter rw( send_ntk( ntk, rcv ) );
   ntk_t res;
   rw.rewrite( receive_into( res ) );
