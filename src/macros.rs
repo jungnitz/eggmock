@@ -40,9 +40,15 @@ macro_rules! define_network {
                     self
                 }
 
-                fn inputs(&self) -> &[Signal] {
+                fn inputs(&self) -> &[$crate::Signal] {
                     match self {
                         $(Self::$gate(ids) => ids),+
+                    }
+                }
+
+                fn function(&self) -> $crate::GateFunction {
+                    match self {
+                        $(Self::$gate(_) => $crate::define_network!(@gate_fn $gate $($fn)?)),+
                     }
                 }
             }
@@ -108,10 +114,10 @@ macro_rules! define_network {
         }
     };
     (@gate_fn $gate:ident $fn:ident) => {
-        $crate::ffi::__private::GateFunction::$fn
+        $crate::GateFunction::$fn
     };
     (@gate_fn $gate:ident) => {
-        $crate::ffi::__private::GateFunction::$gate
+        $crate::GateFunction::$gate
     };
     (@fanin_typ $of:ty, *) => {
         Vec<$of>

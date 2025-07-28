@@ -163,14 +163,9 @@ impl<'s, Res> Receiver for ReceiverFFI<'s, Res> {
 
 #[doc(hidden)]
 pub mod __private {
-    use super::*;
+    use crate::GateFunction;
 
-    pub enum GateFunction {
-        And,
-        Or,
-        Xor,
-        Maj,
-    }
+    use super::*;
 
     pub fn receive_with_function(
         receiver: &mut impl Receiver<Gate = FFIGate>,

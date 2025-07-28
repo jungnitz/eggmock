@@ -44,4 +44,14 @@ pub trait Gate: 'static + Debug + Sized + Clone + Hash + Eq {
     fn map_input_ids(self, mut map: impl FnMut(Id, usize) -> Signal) -> Self {
         self.map_input_signals(|signal, idx| signal.map_id(|id| map(id, idx)))
     }
+
+    fn function(&self) -> GateFunction;
+}
+
+/// Function of a gate.
+pub enum GateFunction {
+    And,
+    Or,
+    Xor,
+    Maj,
 }
