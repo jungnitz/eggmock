@@ -49,6 +49,7 @@ pub trait Gate: 'static + Debug + Sized + Clone + Hash + Eq {
 }
 
 /// Function of a gate.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum GateFunction {
     And,
     Or,
