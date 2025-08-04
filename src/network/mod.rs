@@ -42,7 +42,7 @@ impl<G: Gate> Network<G> {
         }
 
         let id = Id::from(self.nodes.len() as u32);
-        if node.inputs().is_empty() {
+        if node.is_leaf() {
             self.leaves.push(id);
         } else {
             if node

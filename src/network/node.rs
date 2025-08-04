@@ -17,6 +17,12 @@ impl<G: Gate> Node<G> {
             Self::Gate(gate) => gate.inputs(),
         }
     }
+    pub fn is_leaf(&self) -> bool {
+        match self {
+            Self::False | Self::Input(_) => true,
+            Self::Gate(_) => false,
+        }
+    }
     pub fn map_input_signals(self, map: impl FnMut(Signal, usize) -> Signal) -> Self {
         match self {
             Self::False | Self::Input(_) => self,
