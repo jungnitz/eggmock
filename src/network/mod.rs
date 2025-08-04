@@ -56,7 +56,9 @@ impl<G: Gate> Network<G> {
                 if node.inputs()[0..i].iter().any(|prev| prev == input) {
                     continue;
                 }
-                self.nodes[input.node_id().to_usize()].fanout.push(*input);
+                self.nodes[input.node_id().to_usize()]
+                    .fanout
+                    .push(Signal::new(id, input.is_inverted()));
             }
         }
         self.memo.insert(node.clone(), id);
