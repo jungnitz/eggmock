@@ -351,7 +351,7 @@ result send_ntk( ntk_t const& ntk, receiver<result> receiver )
 template<class ntk_t>
 ntk_t rewrite( ntk_t const& ntk, receiver<rewriter_ffi> rcv )
 {
-  rewriter rw( send_ntk( ntk, rcv ) );
+  rewriter rw( send_ntk( ntk, std::move( rcv ) ) );
   ntk_t res;
   rw.rewrite( receive_into( res ) );
   return res;
