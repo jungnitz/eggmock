@@ -226,7 +226,7 @@ pub mod __private {
                 next[i] = next[remaining_idx];
                 i += 1;
             }
-            next.shrink_to(i);
+            next.truncate(i);
         }
     }
 }
