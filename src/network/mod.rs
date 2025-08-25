@@ -110,6 +110,10 @@ impl<G: Gate> Network<G> {
             println!("{id:?}: {node:?}");
         }
     }
+
+    pub fn size(&self) -> usize {
+        self.nodes.len()
+    }
 }
 
 impl<G> Default for Network<G> {
