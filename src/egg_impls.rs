@@ -115,7 +115,7 @@ impl<'a, CF: CostFunction<L>, L: NetworkLanguage, N: Analysis<L>> EggExt
     }
 }
 
-impl<'a, L: NetworkLanguage> EggExt for RecExpr<L> {
+impl<L: NetworkLanguage> EggExt for RecExpr<L> {
     type Language = L;
 
     fn get_node(&self, id: EggId) -> &Self::Language {
