@@ -47,10 +47,12 @@ impl Signal {
 
 impl Debug for Signal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("Signal")
-            .field(&self.is_inverted())
-            .field(&self.node_id())
-            .finish()
+        write!(f, "Signal(")?;
+        if self.is_inverted() {
+            write!(f, "!{})", self.node_id().0)
+        } else {
+            write!(f, "{})", self.node_id().0)
+        }
     }
 }
 
