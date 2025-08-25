@@ -98,11 +98,14 @@ impl<G: Gate> Network<G> {
     /// Sends this network to the given receiver.
     pub fn send<R: Receiver<Gate = G>>(mut self, mut receiver: R) -> R::Result {
         let mut src_to_dest: FxHashMap<Id, Signal> = FxHashMap::default();
-        let outputs = std::mem::take(&mut self.outputs);
+        let mut outputs = std::mem::take(&mut self.outputs);
         for (id, node) in self {
             let mapped_node = node.map_input_ids(|id, _| src_to_dest[&id]);
             let signal = receiver.create(mapped_node);
             src_to_dest.insert(id, signal);
+        }
+        for output in &mut outputs {
+            *output = output.map_id(|id| src_to_dest[&id]);
         }
         receiver.done(outputs)
     }
@@ -111,6 +114,11 @@ impl<G: Gate> Network<G> {
         for (id, node) in self.iter() {
             println!("{id:?}: {node:?}");
         }
+        print!("outputs:");
+        for output in self.outputs() {
+            print!(" {output:?}")
+        }
+        println!()
     }
 
     pub fn size(&self) -> usize {
