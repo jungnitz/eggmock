@@ -12,11 +12,13 @@ pub use language::*;
 pub use node::*;
 pub use signal::*;
 
+#[derive(Clone)]
 struct NetworkNode<G> {
     node: Node<G>,
     fanout: Vec<Signal>,
 }
 
+#[derive(Clone)]
 pub struct Network<G> {
     // topologically sorted (!) list of nodes where index is node id
     nodes: Vec<NetworkNode<G>>,
