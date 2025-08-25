@@ -178,13 +178,6 @@ pub mod __private {
                     <[Signal; 2]>::try_from(signals).expect("should be exactly 2 signals"),
                 ))
             }),
-            GateFunction::Or => treeify_signals::<2>(inputs, |signals| {
-                !receiver.create_gate(FFIGate::And(
-                    <[Signal; 2]>::try_from(signals)
-                        .expect("should be exactly 2 signals")
-                        .map(|sig| !sig),
-                ))
-            }),
             GateFunction::Xor => treeify_signals::<3>(inputs, |signals| {
                 if let Ok(signals) = <[Signal; 3]>::try_from(signals) {
                     receiver.create_gate(FFIGate::Xor3(signals))
