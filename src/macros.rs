@@ -20,18 +20,29 @@ macro_rules! define_network {
                     Input(u32),
                     "f" = False,
                     "!" = Not($crate::egg::Id),
-                    $($gate_str = $gate($crate::define_network!(@fanin_typ $crate::egg::Id, $fanin))),+,
+                    $(
+                        $gate_str = $gate(
+                            $crate::define_network!(@fanin_typ $crate::egg::Id, $fanin)
+                        )
+                    ),+,
                 }
             }
 
             #[derive(Debug, Clone, Eq, PartialEq, Hash)]
             $(#[$meta])*
             $vis enum $name {
-                $($gate($crate::define_network!(@fanin_typ $crate::Signal, $fanin))),+
+                $(
+                    $gate(
+                        $crate::define_network!(@fanin_typ $crate::Signal, $fanin)
+                    )
+                ),+
             }
 
             impl $crate::Gate for $name {
-                fn map_input_signals(mut self, mut map: impl FnMut(Signal, usize) -> Signal) -> Self {
+                fn map_input_signals(
+                    mut self,
+                    mut map: impl FnMut($crate::Signal, usize) -> $crate::Signal
+                ) -> Self {
                     match &mut self {
                         $(Self::$gate(signals) => {
                             signals.iter_mut().enumerate().for_each(|(i, signal)| *signal = map(*signal, i));
@@ -54,10 +65,13 @@ macro_rules! define_network {
             }
 
             impl $crate::ReceiveInto<$crate::FFIGate> for $name {
-                fn receive_into(self, receiver: &mut impl Receiver<Gate = FFIGate>) -> Signal {
+                fn receive_into(
+                    self,
+                    receiver: &mut impl $crate::Receiver<Gate = $crate::FFIGate>
+                ) -> $crate::Signal {
                     match self {
                         $(
-                        Self::$gate(signals) => ffi::__private::receive_with_function(
+                        Self::$gate(signals) => $crate::ffi::__private::receive_with_function(
                             receiver,
                             $crate::define_network!(@gate_fn $gate $($fn)?),
                             &signals,
@@ -67,12 +81,12 @@ macro_rules! define_network {
                 }
             }
 
-            impl NetworkLanguage for [<$name Language>] {
+            impl $crate::NetworkLanguage for [<$name Language>] {
                 type Gate = $name;
 
                 fn from_node(
-                    node: Node<$name>,
-                    mut signal_mapper: impl FnMut(Signal, usize) -> egg::Id,
+                    node: $crate::Node<$name>,
+                    mut signal_mapper: impl FnMut($crate::Signal, usize) -> $crate::egg::Id,
                 ) -> Self {
                     match node {
                         $crate::Node::Input(id) => Self::Input(id),
@@ -87,8 +101,8 @@ macro_rules! define_network {
 
                 fn to_node(
                     &self,
-                    mut id_mapper: impl FnMut(egg::Id, usize) -> Signal
-                ) -> Option<Node<$name>> {
+                    mut id_mapper: impl FnMut($crate::egg::Id, usize) -> $crate::Signal
+                ) -> Option<$crate::Node<$name>> {
                     match self {
                         Self::Input(id) => Some($crate::Node::Input(*id)),
                         Self::False => Some($crate::Node::False),
