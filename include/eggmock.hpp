@@ -1,5 +1,6 @@
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -32,6 +33,13 @@ struct signal
 namespace _private
 {
 
+template<class ntk_t, class result_t>
+struct receive_data
+{
+  ntk_t ntk;
+  std::function<result_t( ntk_t )> transformer;
+};
+
 template<class ntk_t>
 signal from_ntk_sig( ntk_t const& ntk, typename ntk_t::signal const& s )
 {
@@ -49,23 +57,26 @@ typename ntk_t::signal to_ntk_sig( ntk_t& ntk, signal s )
   return sig;
 }
 
-template<class ntk_t>
-void free_ntkptr( void* )
+template<class ntk_t, class result_t>
+void free_dataptr( void* state )
 {
-  // no-op
+  auto data = reinterpret_cast<receive_data<ntk_t, result_t>*>( state );
+  delete data;
 }
 
-template<class ntk_t>
-signal create_false_ntkptr( void* state )
+template<class ntk_t, class result_t>
+signal create_false_dataptr( void* state )
 {
-  auto ntk = reinterpret_cast<ntk_t*>( state );
+  auto data = reinterpret_cast<receive_data<ntk_t, result_t>*>( state );
+  auto ntk = &data->ntk;
   return from_ntk_sig( *ntk, ntk->get_constant( false ) );
 }
 
-template<class ntk_t>
-signal create_input_ntkptr( void* state, uint32_t idx )
+template<class ntk_t, class result_t>
+signal create_input_dataptr( void* state, uint32_t idx )
 {
-  auto ntk = reinterpret_cast<ntk_t*>( state );
+  auto data = reinterpret_cast<receive_data<ntk_t, result_t>*>( state );
+  auto ntk = &data->ntk;
   while ( ntk->num_pis() <= idx )
   {
     ntk->create_pi();
@@ -73,50 +84,56 @@ signal create_input_ntkptr( void* state, uint32_t idx )
   return from_ntk_sig<ntk_t>( *ntk, ntk->make_signal( ntk->pi_at( idx ) ) );
 }
 
-template<class ntk_t>
-signal create_and_ntkptr( void* state, signal a, signal b )
+template<class ntk_t, class result_t>
+signal create_and_dataptr( void* state, signal a, signal b )
 {
-  auto ntk = reinterpret_cast<ntk_t*>( state );
+  auto data = reinterpret_cast<receive_data<ntk_t, result_t>*>( state );
+  auto ntk = &data->ntk;
   return from_ntk_sig<ntk_t>(
       *ntk,
       ntk->create_and( to_ntk_sig<ntk_t>( *ntk, a ), to_ntk_sig<ntk_t>( *ntk, b ) ) );
 }
 
-template<class ntk_t>
-signal create_xor_ntkptr( void* state, signal a, signal b )
+template<class ntk_t, class result_t>
+signal create_xor_dataptr( void* state, signal a, signal b )
 {
-  auto ntk = reinterpret_cast<ntk_t*>( state );
+  auto data = reinterpret_cast<receive_data<ntk_t, result_t>*>( state );
+  auto ntk = &data->ntk;
   return from_ntk_sig<ntk_t>(
       *ntk,
       ntk->create_xor( to_ntk_sig<ntk_t>( *ntk, a ), to_ntk_sig<ntk_t>( *ntk, b ) ) );
 }
 
-template<class ntk_t>
-signal create_xor3_ntkptr( void* state, signal a, signal b, signal c )
+template<class ntk_t, class result_t>
+signal create_xor3_dataptr( void* state, signal a, signal b, signal c )
 {
-  auto ntk = reinterpret_cast<ntk_t*>( state );
+  auto data = reinterpret_cast<receive_data<ntk_t, result_t>*>( state );
+  auto ntk = &data->ntk;
   return from_ntk_sig<ntk_t>(
       *ntk,
       ntk->create_xor3( to_ntk_sig<ntk_t>( *ntk, a ), to_ntk_sig<ntk_t>( *ntk, b ), to_ntk_sig<ntk_t>( *ntk, c ) ) );
 }
 
-template<class ntk_t>
-signal create_maj_ntkptr( void* state, signal a, signal b, signal c )
+template<class ntk_t, class result_t>
+signal create_maj_dataptr( void* state, signal a, signal b, signal c )
 {
-  auto ntk = reinterpret_cast<ntk_t*>( state );
+  auto data = reinterpret_cast<receive_data<ntk_t, result_t>*>( state );
+  auto ntk = &data->ntk;
   return from_ntk_sig<ntk_t>(
       *ntk,
       ntk->create_maj( to_ntk_sig<ntk_t>( *ntk, a ), to_ntk_sig<ntk_t>( *ntk, b ), to_ntk_sig<ntk_t>( *ntk, c ) ) );
 }
 
-template<class ntk_t>
-void done_ntkptr( void* state, signal const* outputs, size_t n_outputs )
+template<class ntk_t, class result_t>
+result_t done_dataptr( void* state, signal const* outputs, size_t n_outputs )
 {
-  auto ntk = static_cast<ntk_t*>( state );
+  auto data = reinterpret_cast<receive_data<ntk_t, result_t>*>( state );
+  auto ntk = &data->ntk;
   for ( size_t i = 0; i < n_outputs; i++ )
   {
     ntk->create_po( to_ntk_sig( *ntk, outputs[i] ) );
   }
+  return data->transformer( std::move( *ntk ) );
 }
 
 } // namespace _private
@@ -135,18 +152,27 @@ struct receiver_ffi
   result ( *done )( void*, signal const*, size_t ) = nullptr;
 };
 
-template<class ntk_t>
-receiver_ffi<void> receive_into( ntk_t& ntk )
+template<class ntk_t, class result_t>
+receiver_ffi<result_t> receive( std::function<result_t( ntk_t )> transformer )
 {
-  return receiver_ffi<void>{ .state = reinterpret_cast<void*>( &ntk ),
-                             .free = _private::free_ntkptr<ntk_t>,
-                             .create_false = _private::create_false_ntkptr<ntk_t>,
-                             .create_input = _private::create_input_ntkptr<ntk_t>,
-                             .create_and = _private::create_and_ntkptr<ntk_t>,
-                             .create_xor = _private::create_xor_ntkptr<ntk_t>,
-                             .create_xor3 = _private::create_xor3_ntkptr<ntk_t>,
-                             .create_maj = _private::create_maj_ntkptr<ntk_t>,
-                             .done = _private::done_ntkptr<ntk_t> };
+  const auto data = new _private::receive_data<ntk_t, result_t>{
+      .transformer = std::move( transformer ),
+  };
+  return receiver_ffi<result_t>{ .state = data,
+                                 .free = _private::free_dataptr<ntk_t, result_t>,
+                                 .create_false = _private::create_false_dataptr<ntk_t, result_t>,
+                                 .create_input = _private::create_input_dataptr<ntk_t, result_t>,
+                                 .create_and = _private::create_and_dataptr<ntk_t, result_t>,
+                                 .create_xor = _private::create_xor_dataptr<ntk_t, result_t>,
+                                 .create_xor3 = _private::create_xor3_dataptr<ntk_t, result_t>,
+                                 .create_maj = _private::create_maj_dataptr<ntk_t, result_t>,
+                                 .done = _private::done_dataptr<ntk_t, result_t> };
+}
+
+template<class ntk_t>
+receiver_ffi<void> receive_into( ntk_t& target )
+{
+  return receive<ntk_t, void>( [&]( ntk_t ntk ) { target = std::move( ntk ); } );
 }
 
 /// Safe wrapper around `receiver_ffi`.
