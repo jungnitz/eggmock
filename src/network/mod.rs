@@ -24,6 +24,7 @@ pub struct Network<G> {
     nodes: Vec<NetworkNode<G>>,
     memo: FxHashMap<Node<G>, Id>,
     leaves: Vec<Id>,
+    inputs: Vec<Id>,
     outputs: Vec<Signal>,
 }
 
@@ -43,9 +44,21 @@ impl<G: Gate> Network<G> {
             return *id;
         }
 
+        if let Node::Input(i) = &node {
+            for j in self.inputs.len() as u32..*i {
+                self.add(Node::Input(j));
+            }
+        }
+
         let id = Id::from(self.nodes.len() as u32);
         if node.is_leaf() {
             self.leaves.push(id);
+            if let Node::Input(i) = &node
+                && *i >= self.inputs.len() as u32
+            {
+                assert_eq!(*i, self.inputs.len() as u32);
+                self.inputs.push(id);
+            };
         } else {
             if node
                 .inputs()
@@ -95,6 +108,10 @@ impl<G: Gate> Network<G> {
         &self.leaves
     }
 
+    pub fn inputs(&self) -> &[Id] {
+        &self.inputs
+    }
+
     /// Sends this network to the given receiver.
     pub fn send<R: Receiver<Gate = G>>(mut self, mut receiver: R) -> R::Result {
         let mut src_to_dest: FxHashMap<Id, Signal> = FxHashMap::default();
@@ -133,6 +150,7 @@ impl<G> Default for Network<G> {
             memo: Default::default(),
             nodes: Default::default(),
             outputs: Default::default(),
+            inputs: Default::default(),
         }
     }
 }
