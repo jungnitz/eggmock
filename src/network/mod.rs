@@ -1,6 +1,7 @@
 use crate::Receiver;
 
 use rustc_hash::FxHashMap;
+use std::cmp::max;
 use std::fmt::Debug;
 use std::hash::Hash;
 
@@ -16,7 +17,7 @@ pub use signal::*;
 struct NetworkNode<G> {
     node: Node<G>,
     fanout: Vec<Signal>,
-    level: u64,
+    level: usize,
 }
 
 #[derive(Clone)]
@@ -27,6 +28,7 @@ pub struct Network<G> {
     leaves: Vec<Id>,
     inputs: Vec<Id>,
     outputs: Vec<Signal>,
+    max_level: usize,
 }
 
 impl<G: Gate> Network<G> {
@@ -39,8 +41,12 @@ impl<G: Gate> Network<G> {
         self.outputs = outputs;
     }
 
-    pub fn level(&self, id: Id) -> u64 {
+    pub fn level(&self, id: Id) -> usize {
         self.nodes[id.to_usize()].level
+    }
+
+    pub fn max_level(&self) -> usize {
+        self.max_level
     }
 
     /// Adds the given node to this network.
@@ -88,7 +94,7 @@ impl<G: Gate> Network<G> {
             .map(|signal| self.nodes[signal.node_id().to_usize()].level + 1)
             .max()
             .unwrap_or(0);
-
+        self.max_level = max(self.max_level, level);
         self.memo.insert(node.clone(), id);
         self.nodes.push(NetworkNode {
             node,
@@ -165,6 +171,7 @@ impl<G> Default for Network<G> {
             nodes: Default::default(),
             outputs: Default::default(),
             inputs: Default::default(),
+            max_level: 0,
         }
     }
 }
