@@ -16,6 +16,7 @@ pub use signal::*;
 struct NetworkNode<G> {
     node: Node<G>,
     fanout: Vec<Signal>,
+    level: u64,
 }
 
 #[derive(Clone)]
@@ -36,6 +37,10 @@ impl<G: Gate> Network<G> {
 
     pub fn set_outputs(&mut self, outputs: Vec<Signal>) {
         self.outputs = outputs;
+    }
+
+    pub fn level(&self, id: Id) -> u64 {
+        self.nodes[id.to_usize()].level
     }
 
     /// Adds the given node to this network.
@@ -76,10 +81,19 @@ impl<G: Gate> Network<G> {
                     .push(Signal::new(id, input.is_inverted()));
             }
         }
+
+        let level = node
+            .inputs()
+            .iter()
+            .map(|signal| self.nodes[signal.node_id().to_usize()].level + 1)
+            .max()
+            .unwrap_or(0);
+
         self.memo.insert(node.clone(), id);
         self.nodes.push(NetworkNode {
             node,
             fanout: Vec::new(),
+            level,
         });
         id
     }
