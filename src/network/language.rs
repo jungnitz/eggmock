@@ -1,6 +1,6 @@
 use egg::Language;
 
-use crate::{Gate, Node, Signal};
+use crate::{Gate, GateFunction, Node, Signal};
 
 /// Contains the [`Language`] type that can represent a Network.
 pub trait NetworkLanguage: Language {
@@ -17,6 +17,7 @@ pub trait NetworkLanguage: Language {
     ///
     /// Returns [`None`] if this EGraph node is a not.
     fn to_node(&self, id_mapper: impl FnMut(egg::Id, usize) -> Signal) -> Option<Node<Self::Gate>>;
+    fn gate_function(&self) -> Option<GateFunction>;
 
     /// Returns true iff this node is a not.
     fn is_not(&self) -> bool;

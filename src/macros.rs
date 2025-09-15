@@ -115,6 +115,13 @@ macro_rules! define_network {
                     }
                 }
 
+                fn gate_function(&self) -> Option<$crate::GateFunction> {
+                    match self {
+                        $(Self::$gate(_) => Some($crate::define_network!(@gate_fn $gate $($fn)?)),)*
+                        _ => None,
+                    }
+                }
+
                 fn is_not(&self) -> bool {
                     match self {
                         Self::Not(_) => true,
