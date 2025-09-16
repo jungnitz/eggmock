@@ -128,6 +128,18 @@ macro_rules! define_network {
                         _ => false,
                     }
                 }
+                fn is_false(&self) -> bool {
+                    match self {
+                        Self::False => true,
+                        _ => false,
+                    }
+                }
+                fn is_input(&self) -> bool {
+                    match self {
+                        Self::Input(_) => true,
+                        _ => false,
+                    }
+                }
                 fn not(id: $crate::egg::Id) -> Self {
                     Self::Not(id)
                 }
