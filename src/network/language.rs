@@ -23,8 +23,10 @@ pub trait NetworkLanguage: Language {
     fn is_not(&self) -> bool;
     /// Returns true iff this node is the false constant
     fn is_false(&self) -> bool;
-    // Returns true iff this node is an input
+    /// Returns true iff this node is an input
     fn is_input(&self) -> bool;
+    /// Returns the input id of this node.
+    fn input_id(&self) -> Option<u32>;
     /// Creates a new not node with the given child id.
     fn not(id: egg::Id) -> Self;
 }

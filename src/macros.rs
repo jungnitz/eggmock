@@ -140,6 +140,12 @@ macro_rules! define_network {
                         _ => false,
                     }
                 }
+                fn input_id(&self) -> Option<u32> {
+                    match self {
+                        Self::Input(id) => Some(*id),
+                        _ => None,
+                    }
+                }
                 fn not(id: $crate::egg::Id) -> Self {
                     Self::Not(id)
                 }
