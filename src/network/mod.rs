@@ -17,6 +17,7 @@ pub use signal::*;
 struct NetworkNode<G> {
     node: Node<G>,
     fanout: Vec<Signal>,
+    fanout_nodes: Vec<Id>,
     level: usize,
 }
 
@@ -79,12 +80,17 @@ impl<G: Gate> Network<G> {
                 panic!("node input id out of bounds");
             }
             for (i, input) in node.inputs().iter().enumerate() {
-                if node.inputs()[0..i].iter().any(|prev| prev == input) {
-                    continue;
+                if !node.inputs()[0..i].iter().any(|prev| prev == input) {
+                    self.nodes[input.node_id().to_usize()]
+                        .fanout
+                        .push(Signal::new(id, input.is_inverted()));
                 }
-                self.nodes[input.node_id().to_usize()]
-                    .fanout
-                    .push(Signal::new(id, input.is_inverted()));
+                if !node.inputs()[0..i]
+                    .iter()
+                    .any(|prev| prev.node_id() == input.node_id())
+                {
+                    self.nodes[input.node_id().to_usize()].fanout_nodes.push(id);
+                }
             }
         }
 
@@ -99,6 +105,7 @@ impl<G: Gate> Network<G> {
         self.nodes.push(NetworkNode {
             node,
             fanout: Vec::new(),
+            fanout_nodes: Vec::new(),
             level,
         });
         id
@@ -121,6 +128,11 @@ impl<G: Gate> Network<G> {
     /// input.
     pub fn node_outputs(&self, id: Id) -> &[Signal] {
         &self.nodes[id.to_usize()].fanout
+    }
+
+    /// Returns the *set* of node ids that have the node with the given id as an input.
+    pub fn node_output_ids(&self, id: Id) -> &[Id] {
+        &self.nodes[id.to_usize()].fanout_nodes
     }
 
     /// Returns an iterator over all leaf nodes (i.e. nodes with no inputs).
