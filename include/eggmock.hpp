@@ -373,6 +373,8 @@ result send_ntk( ntk_t const& ntk, receiver<result> receiver )
     signal sig = _private::send_ntk_signal( ntk, src_sig, receiver );
     outputs.emplace_back( sig );
   } );
+  ntk.clear_values();
+  ntk.clear_visited();
   return receiver.done( outputs.data(), outputs.size() );
 }
 
