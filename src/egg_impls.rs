@@ -1,5 +1,5 @@
 use egg::{Analysis, CostFunction, EGraph, Extractor, Language, RecExpr};
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{Id, NetworkLanguage, Node, Receiver, Signal};
 
@@ -65,7 +65,7 @@ pub trait EggExt {
         &self,
         mut receiver: R,
         outputs: impl IntoIterator<Item = EggId>,
-    ) -> R::Result {
+    ) -> Option<R::Result> {
         let mut src_to_dest: FxHashMap<EggId, Signal> = FxHashMap::default();
         let mut output_signals = Vec::new();
         for output_id in outputs {
@@ -75,6 +75,9 @@ pub trait EggExt {
             let mut node_id = output_id;
             let mut node = self.get_node(node_id);
             let mut known_inputs = 0;
+
+            // contains all nodes in the path before node_id for cycle detection
+            let mut nodes = FxHashSet::default();
             loop {
                 if known_inputs == node.children().len() || src_to_dest.contains_key(&node_id) {
                     if known_inputs == node.children().len() {
@@ -90,10 +93,14 @@ pub trait EggExt {
                         break;
                     }
                     (node_id, node, known_inputs) = path.pop().unwrap();
+                    nodes.remove(&node_id);
                     known_inputs += 1;
                 } else {
                     let child_id = node.children()[known_inputs];
                     path.push((node_id, node, known_inputs));
+                    if !nodes.insert(node_id) {
+                        return None;
+                    }
                     node_id = child_id;
                     node = self.get_node(node_id);
                     known_inputs = 0;
@@ -101,7 +108,7 @@ pub trait EggExt {
             }
             output_signals.push(src_to_dest[&output_id]);
         }
-        receiver.done(output_signals)
+        Some(receiver.done(output_signals))
     }
 }
 
