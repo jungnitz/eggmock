@@ -50,6 +50,10 @@ impl<G: Gate> Network<G> {
         self.max_level
     }
 
+    pub fn contains(&self, node: &Node<G>) -> bool {
+        self.memo.contains_key(node)
+    }
+
     /// Adds the given node to this network.
     pub fn add(&mut self, node: Node<G>) -> Id {
         if let Some(id) = self.memo.get(&node) {
