@@ -215,7 +215,7 @@ impl<G> Iterator for IntoIter<G> {
 }
 
 /// References a node in a network.
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(C)]
 pub struct Id(u32);
 
